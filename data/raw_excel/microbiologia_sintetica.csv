@@ -1,0 +1,5 @@
+paciente,fecha_ingreso,fecha_toma,muestra,organismo,resultado,servicio
+100001,2026-04-01,2026-04-04,Urocultivo,Escherichia coli,positivo,UCI
+100002,2026-04-01,2026-04-02,Hemocultivo,Staphylococcus epidermidis,positivo,UCI
+100003,2026-04-03,2026-04-07,Aspirado traqueal,Klebsiella pneumoniae,crecimiento,UCI neonatal
+100004,2026-04-05,2026-04-08,Urocultivo,,negativo,Hospitalizacion

@@ -1,0 +1,3 @@
+paciente,fecha_ingreso,fecha_toma,muestra,organismo,resultado,servicio
+PACIENTE_001,2026-04-01,2026-04-04,Urocultivo,Escherichia coli,positivo,UCI
+PACIENTE_002,2026-04-01,2026-04-02,Hemocultivo,Staphylococcus epidermidis,positivo,UCI
