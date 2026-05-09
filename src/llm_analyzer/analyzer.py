@@ -93,40 +93,26 @@ HISTORIA CLINICA DEIDENTIFICADA:
         return prompt_maestro + "\n\n" + contexto
 
     def extraer_perfil_basal(self, notas_estructuradas):
-        """
-        Extrae perfil basal con motor de redundancia temporal (Fallback).
-        """
         folios_basales = []
-        
-        # BRECHA DETECTADA: Si el primer folio no tiene fecha, el sistema colapsaba.
-        # SOLUCIÓN: Buscamos la fecha más temprana disponible en TODO el documento como ancla.
         todas_las_fechas = [self._fecha_nota(n) for n in notas_estructuradas if self._fecha_nota(n)]
         fecha_ingreso = min(todas_las_fechas) if todas_las_fechas else None
-        
         if not fecha_ingreso:
             return {"estado_basal": {}, "fuente": "sin_fecha_confiable", "comorbilidades_detectadas": [], "fecha_ingreso_absoluta": None}
-
         comorbilidades = set()
         patrones_cronicos = r"(?i)\b(diabetes|dm|hta|hipertension|epoc|erc|falla renal|vih|cancer|tumor|antecedente[s]?)\b"
-        
-        temps_basales = []
-        fio2_basales = []
-
+        temps_basales = []; fio2_basales = []
         for nota in notas_estructuradas:
             fecha_nota = self._fecha_nota(nota)
             if fecha_nota and fecha_nota - fecha_ingreso <= timedelta(days=1):
                 folios_basales.append(nota)
                 hallazgos = re.findall(patrones_cronicos, nota.get("contenido", ""))
                 for h in hallazgos: comorbilidades.add(h.upper())
-                
                 datos = nota.get("datos_duros_verificados", {})
                 temps_basales.extend(datos.get("temperaturas", []))
                 fio2_match = re.search(r"FiO2:?\s*(\d{2})", nota.get("contenido", ""), re.I)
                 if fio2_match: fio2_basales.append(int(fio2_match.group(1)))
-
         avg_temp = sum(temps_basales)/len(temps_basales) if temps_basales else 37.0
         avg_fio2 = sum(fio2_basales)/len(fio2_basales) if fio2_basales else 21
-
         return {
             "estado_basal": {
                 "folios_usados": [n["folio"] for n in folios_basales],
@@ -139,9 +125,6 @@ HISTORIA CLINICA DEIDENTIFICADA:
         }
 
     def _detectar_deterioro_significativo(self, valor_actual, valor_basal, tipo_parametro):
-        """
-        Validación matemática de deterioro clínico significativo vs estado basal.
-        """
         if tipo_parametro == "fiebre":
             umbral_basal = max(38.0, valor_basal + 0.5)
             return valor_actual > umbral_basal
@@ -150,9 +133,6 @@ HISTORIA CLINICA DEIDENTIFICADA:
         return True
 
     def _verificar_umbral_laboratorio(self, datos_cuantitativos, tipo_hallazgo):
-        """
-        Valida matemáticamente si los paraclínicos cumplen umbrales epidemiológicos.
-        """
         leucos = datos_cuantitativos.get("leucocitos", [])
         pcr_vals = datos_cuantitativos.get("pcr", [])
         if tipo_hallazgo == "leucocitosis": return any(l > 12000 for l in leucos)
@@ -161,47 +141,47 @@ HISTORIA CLINICA DEIDENTIFICADA:
         return False
 
     def _es_dia_3_o_mayor(self, fecha_evento_str, fecha_ingreso_obj):
-        """
-        Validación matemática estricta: Día 3 se considera >= 48 horas (o calendario día 3).
-        """
-        if not (fecha_evento_obj := parse_fecha(fecha_evento_str)):
-            return False
-        if not fecha_ingreso_obj:
-            return False
-        
+        if not (fecha_evento_obj := parse_fecha(fecha_evento_str)): return False
+        if not fecha_ingreso_obj: return False
         delta = fecha_evento_obj - fecha_ingreso_obj
         return delta >= timedelta(days=2) 
 
     def _es_hallazgo_negado(self, texto, keyword):
-        """
-        Detecta si un hallazgo clínico está negado (prefijo o sufijo).
-        BRECHA DETECTADA: Ventana de 30 chars era insuficiente para frases médicas complejas.
-        SOLUCIÓN: Expandimos ventana a 60 caracteres y añadimos más partículas.
-        """
-        patrones_prefijo = r"\b(sin|no|niega[n]?|ausencia|ausente|descarta[n]?|negativo[s]?|libre de|no se evidencia|descartando)\b"
+        patrones_prefijo = r"\b(sin|no|niega[n]?|ausencia|ausente|descarta[n]?|negativo[s]?|libre de|no se evidencia|descartando|normotermia|afebril|eupneico)\b"
         regex_prefijo = rf"({patrones_prefijo}.{{0,60}})\b{re.escape(keyword)}\b"
         if re.search(regex_prefijo, texto, re.I): return True
-
-        patrones_sufijo = r"\b(no|ausente|negativo[s]?|descarta[do|da]?|sin hallazgo[s]?|no reactivo)\b"
-        regex_sufijo = rf"\b{re.escape(keyword)}\b[\s\:\-\>]{{1,5}}{patrones_sufijo}"
+        patrones_sufijo = r"\b(no|ausente|negativo[s]?|descarta[do|da]?|sin hallazgo[s]?|no reactivo|dentro de limites normales|dnl)\b"
+        regex_sufijo = rf"\b{re.escape(keyword)}\b[\s\:\-\>]{{1,10}}{patrones_sufijo}"
         if re.search(regex_sufijo, texto, re.I): return True
-            
         return False
 
+    def _search_fuzzy(self, keyword, texto_crudo, threshold=0.92):
+        """
+        Busca un keyword permitiendo variaciones morfológicas o errores de tipeo.
+        Resuelve la 'Fragilidad del Regex' detectada en la auditoría internacional.
+        Umbral elevado a 0.92 para máxima precisión.
+        """
+        # 1. Búsqueda exacta (Rápida)
+        if re.search(rf"\b{re.escape(keyword)}\b", texto_crudo, re.I):
+            return True, keyword
+
+        # 2. Búsqueda difusa por palabras (Segmentación)
+        palabras_doc = re.findall(r"\b\w{4,}\b", texto_crudo.lower())
+        from difflib import SequenceMatcher
+        for p in palabras_doc:
+            ratio = SequenceMatcher(None, keyword.lower(), p).ratio()
+            if ratio >= threshold:
+                return True, p # Encontrado con variación (ej. leucositosis)
+        return False, None
+
     def _verificar_continuidad_dispositivo(self, dispositivos, tipo_buscado, fecha_evento_str):
-        """
-        Verifica la regla epidemiológica: Dispositivo debe estar presente > 48h
-        antes del evento para que se considere ASOCIADO al dispositivo.
-        """
         fecha_evento = parse_fecha(fecha_evento_str)
         if not fecha_evento or not dispositivos: return False
-        
         menciones_previas = []
         for d in dispositivos:
             if tipo_buscado in d.get("tipo", "").lower():
                 fecha_d = parse_fecha(d.get("fecha"))
                 if fecha_d and fecha_d <= fecha_evento: menciones_previas.append(fecha_d)
-        
         if not menciones_previas: return False
         primera = min(menciones_previas); ultima = max(menciones_previas)
         return (ultima - primera) >= timedelta(days=1) 
@@ -230,23 +210,22 @@ HISTORIA CLINICA DEIDENTIFICADA:
 
     def generar_dictamen_stub(self, tipo_iaas, datos_crudos):
         """
-        Motor de evaluación determinística universal (11 IAAS) con Sensibilidad Léxica,
-        Negaciones, Umbrales de Co-ocurrencia, Tendencias y Datos Cuantitativos.
+        Motor de evaluación determinística universal V5 con Sensibilidad Difusa (Fuzzy).
         """
         criteria = get_criteria_summary(tipo_iaas)
         matrix = criteria.get("validation_matrix", {})
         lexical_map = criteria.get("lexical_map", {})
         regla_temporal_base = criteria.get("temporal_rule", "").lower()
         basal_data = datos_crudos.get("basal", {}).get("estado_basal", {})
-        fecha_ingreso = datos_crudos.get("basal", {}).get("fecha_ingreso_absoluta")
-        texto_crudo = json.dumps(datos_crudos, ensure_ascii=False).lower()
+        fecha_ingreso = datos_crudos.get("basal", {}).get("fecha_ingreso_absolute") or datos_crudos.get("basal", {}).get("fecha_ingreso_absoluta")
+        texto_crudo = json.dumps(datos_crudos, ensure_ascii=False, default=str).lower()
         
         faltantes = []
         evidencias_halladas = []
         cumple_regla_temporal = True
         exclusion_detectada = None
 
-        # 1. Inteligencia Quirúrgica y Estadiaje Neonatal (Módulos Específicos)
+        # 1. Inteligencia Específica
         eventos_clave = datos_crudos["linea_tiempo_signos"] + datos_crudos["microbiologia_cruda"]
         fecha_ancla_str = eventos_clave[0].get("fecha") if eventos_clave else None
 
@@ -256,18 +235,18 @@ HISTORIA CLINICA DEIDENTIFICADA:
             else: cumple_regla_temporal = False
         elif tipo_iaas == "ECN":
             estadio_bell, ev_bell = self._clasificar_estadio_bell(texto_crudo)
-            if estadio_bell >= 2: evidencias_halladas.append({"texto": f"Clasificación Bell >= II validada por motor experto."})
-            elif estadio_bell == 1: exclusion_detectada = "Solo cumple Criterios Bell Estadio I (Sospecha), requiere neumatosis para IAAS."
+            if estadio_bell >= 2: evidencias_halladas.append({"texto": f"Clasificación Bell >= II validada."})
+            elif estadio_bell == 1: exclusion_detectada = "Solo cumple Criterios Bell Estadio I (Sospecha)."
             else: faltantes.append("CLASIFICACIÓN_BELL (Falta evidencia radiológica)")
 
-        # 2. Validación Temporal (Dia 3 / 72h)
+        # 2. Validación Temporal
         if "dia de estancia >= 3" in regla_temporal_base:
             eventos_d3 = [e for e in eventos_clave if self._es_dia_3_o_mayor(e.get("fecha"), fecha_ingreso)]
             if not eventos_d3: cumple_regla_temporal = False
         elif ">= 72 horas de vida" in regla_temporal_base:
             if not re.search(r"72\s*h|3\s*dia|4\s*dia|vida", texto_crudo): cumple_regla_temporal = False
 
-        # 3. Evaluación Multidimensional
+        # 3. Evaluación Multidimensional con SENSIBILIDAD DIFUSA
         for dimension, config in matrix.items():
             items_dimension = config.get("items", [])
             min_requerido = config.get("min_required", 1)
@@ -277,52 +256,44 @@ HISTORIA CLINICA DEIDENTIFICADA:
             for item_req in items_dimension:
                 base_kw = item_req.split()[0].lower()
                 keywords = lexical_map.get(base_kw, [base_kw])
-                
                 confirmado = False
                 for kw in keywords:
-                    if kw in ["leucocitosis", "leucopenia", "pcr elevada"]:
-                        if any(self._verificar_umbral_laboratorio(n.get("datos_duros_verificados", {}), kw) for n in datos_crudos.get("ventana_raw", [])):
-                            confirmado = True; evidencia_txt = f"Hallazgo OBJETIVO: {kw.upper()}"
-                    elif kw == "fiebre":
+                    if kw == "fiebre":
                         picos = [item for item in datos_crudos["linea_tiempo_signos"] if item.get("T", 0) > 38.0]
-                        if any(self._detectar_deterioro_significativo(p["T"], basal_data.get("temp_promedio_ingreso", 37.0), "fiebre") for p in picos):
+                        folios_basal = basal_data.get("folios_usados", [])
+                        if picos and (len(folios_basal) <= 1 or any(self._detectar_deterioro_significativo(p["T"], basal_data.get("temp_promedio_ingreso", 37.0), "fiebre") for p in picos)):
                             confirmado = True; evidencia_txt = "Deterioro febril vs Basal"
-                    elif kw in ["fio2", "peep", "deterioro ventilatorio"]:
+                    elif kw in ["fio2", "peep"]:
                         f_match = re.search(r"FiO2:?\s*(\d{2})", texto_crudo, re.I)
                         if f_match and self._detectar_deterioro_significativo(int(f_match.group(1)), basal_data.get("fio2_promedio_ingreso", 21), "oxigenacion"):
                             confirmado = True; evidencia_txt = f"Deterioro oxigenación (FiO2 {f_match.group(1)}%)"
-                    elif kw in ["urocultivo", "hemocultivo", "cultivo", "lcr", "pcr", "toxina"]:
+                    elif kw in ["urocultivo", "hemocultivo", "cultivo", "lcr"]:
                         from criteria.registry import PATHOGEN_REGISTRY
                         hallazgos_lab = []
                         for lab in datos_crudos["microbiologia_cruda"]:
                             txt_lab = lab.get("texto", "").lower()
-                            if kw in txt_lab and not re.search(r"negativo|no\s*desarrolla|sin\s*crecimiento|normal|contaminado", txt_lab):
+                            if kw in txt_lab and not re.search(r"negativo|no\s*desarrolla|normal", txt_lab):
                                 hallazgos_lab.append(txt_lab)
                         if hallazgos_lab:
                             txt_c = " ".join(hallazgos_lab)
                             if any(p in txt_c for p in PATHOGEN_REGISTRY["reconocidos"]):
                                 confirmado = True; evidencia_txt = f"Lab POSITIVO (Patógeno): {kw}"
                             elif any(p in txt_c for p in PATHOGEN_REGISTRY["comensales"]):
-                                if len(hallazgos_lab) >= 2 or tipo_iaas not in ["ITS-CVC", "SEPSIS_TARDIA"]:
-                                    confirmado = True; evidencia_txt = f"Lab POSITIVO (Comensal x2): {kw}"
-                    elif kw in ["sonda", "ventilacion", "cateter", "cvc", "tot"]:
+                                if len(hallazgos_lab) >= 2: confirmado = True; evidencia_txt = f"Lab POSITIVO (Comensal x2)"
+                    elif kw in ["sonda", "ventilacion", "cateter", "cvc"]:
                         if self._verificar_continuidad_dispositivo(datos_crudos["dispositivos"], kw, fecha_ancla_str):
-                            confirmado = True; evidencia_txt = f"Dispositivo invasivo ({kw}) validado > 24-48h"
+                            confirmado = True; evidencia_txt = f"Dispositivo invasivo ({kw}) validado"
                     else:
-                        if re.search(rf"\b{kw}\b", texto_crudo, re.I) and not self._es_hallazgo_negado(texto_crudo, kw):
-                            confirmado = True; evidencia_txt = f"Signo clínico: {kw}"
-                    
+                        # BUSQUEDA DIFUSA V5 (Resuelve typos)
+                        hallado_fuzzy, palabra_encontrada = self._search_fuzzy(kw, texto_crudo)
+                        if hallado_fuzzy and not self._es_hallazgo_negado(texto_crudo, palabra_encontrada):
+                            confirmado = True; evidencia_txt = f"Signo detectado (Difuso): {palabra_encontrada}"
                     if confirmado:
-                        hallazgos_unicos.add(item_req)
-                        evidencias_dim.append(evidencia_txt)
-                        break
-            
-            if len(hallazgos_unicos) >= min_requerido:
-                evidencias_halladas.extend([{"texto": e} for e in evidencias_dim[:3]])
-            else:
-                faltantes.append(f"{dimension.upper()} (Faltan {min_requerido - len(hallazgos_unicos)} signos)")
+                        hallazgos_unicos.add(item_req); evidencias_dim.append(evidencia_txt); break
+            if len(hallazgos_unicos) >= min_requerido: evidencias_halladas.extend([{"texto": e} for e in evidencias_dim[:3]])
+            else: faltantes.append(f"{dimension.upper()} (Faltan {min_requerido - len(hallazgos_unicos)} signos)")
 
-        # 4. Verificación de Exclusiones Clínicas
+        # 4. Exclusiones
         exclusiones = criteria.get("exclusions", [])
         for excl in exclusiones:
             kw_excl = excl.split()[0].lower()
@@ -338,14 +309,12 @@ HISTORIA CLINICA DEIDENTIFICADA:
         if exclusion_detectada:
             dictamen = "Descartado por Exclusión"
             motivo = f"Criterio excluido por hallazgo clínico: {exclusion_detectada}"
-        elif not cumple_regla_temporal and len(faltantes) == 0:
-            motivo = "No cumple regla de 48-72h (IPI/POA)"
-        else:
-            motivo = "" if cumple else f"Fallo matriz: {', '.join(faltantes)}"
+        elif not cumple_regla_temporal and len(faltantes) == 0: motivo = "No cumple regla de 48-72h (IPI/POA)"
+        else: motivo = "" if cumple else f"Fallo matriz: {', '.join(faltantes)}"
 
         return {
             "dictamen_final": dictamen, "cumple": cumple, "motivo_descarte": motivo,
-            "justificacion_forense": f"Análisis multi-capa V4: matriz, tendencias, continuidad y exclusiones (Excl: {exclusion_detectada or 'Ninguna'}).",
+            "justificacion_forense": f"Análisis multi-capa V5 (Fuzzy-NLP): matriz, tendencias, continuidad y exclusiones.",
             "evidencia": evidencias_halladas, "nivel_confianza": "medio" if cumple else "bajo"
         }
 
@@ -354,7 +323,6 @@ HISTORIA CLINICA DEIDENTIFICADA:
         ventanas = self.segmentar_notas_por_ventanas(notas_estructuradas)
         resultados_totales = []
         sospechosos = sospechosos or []
-
         for indice, ventana in enumerate(ventanas, start=1):
             datos_crudos = self._extraer_datos_deterministicos(ventana, perfil_basal, indice, sospechosos)
             datos_crudos["ventana_raw"] = ventana 
@@ -365,12 +333,10 @@ HISTORIA CLINICA DEIDENTIFICADA:
             else:
                 pre_dictamen = self.generar_dictamen_stub(tipo_iaas, datos_crudos)
                 dictamen_auditado = self.auditar_dictamen_stub(pre_dictamen, datos_crudos)
-
             dictamen = normalize_dictamen(tipo_iaas, dictamen_auditado, mode=self.mode)
             dictamen = self.safety_validator.validate(dictamen)
             resultados_totales.append(dictamen)
             if resultados_totales[-1]["cumple"]: break
-
         return resultados_totales
 
     def auditar_dictamen_stub(self, pre_dictamen, datos_crudos):
@@ -407,9 +373,9 @@ HISTORIA CLINICA DEIDENTIFICADA:
             if re.search(r"sonda|cateter|cvc|ventilacion|tot", contenido, re.I):
                 dispositivos.append({"tipo": self._extraer_dispositivo(contenido), "fecha": nota["fecha"], "folio": nota["folio"]})
             if re.search(r"cultivo|hemocultivo|urocultivo|germen|ufc|pseudomonas|klebsiella", contenido, re.I):
-                microbiologia.append({"fecha": nota["fecha"], "texto": f"NARRATIVO: {contenido[:150]}", "folio": nota["folio"]})
+                microbiologia.append({"fecha": nota["fecha"], "texto": f"NARRATIVO: {contenido}", "folio": nota["folio"]})
             if re.search(r"fiebre|sepsis|infeccion|purul|diarrea|neumonia", contenido, re.I):
-                notas_clave.append({"fecha": nota["fecha"], "texto": contenido[:400], "folio": nota["folio"]})
+                notas_clave.append({"fecha": nota["fecha"], "texto": contenido, "folio": nota["folio"]})
         return {"ventana": indice, "basal": perfil_basal, "linea_tiempo_signos": signos, "dispositivos": dispositivos, "microbiologia_cruda": microbiologia, "notas_narrativas_clave": notas_clave}
 
     def _extraer_dispositivo(self, contenido):

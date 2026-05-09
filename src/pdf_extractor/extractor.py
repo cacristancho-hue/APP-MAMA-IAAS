@@ -1,4 +1,5 @@
 import re
+import subprocess
 
 class HistoriClinicaExtractor:
     def __init__(self):
@@ -41,14 +42,16 @@ class HistoriClinicaExtractor:
         try:
             import fitz # PyMuPDF
         except ImportError:
-            return "Error: La librería 'pymupdf' no está instalada. Ejecute 'pip install pymupdf'."
+            return self.extraer_texto_con_pdftotext(ruta_pdf)
 
         doc = fitz.open(ruta_pdf)
         texto_completo = ""
         
         for pagina in doc:
             bloques = pagina.get_text("blocks")
-            bloques.sort(key=lambda b: (b[1], b[0]))
+            # Ordenamiento robusto para tablas: agrupar por líneas horizontales (y1) con tolerancia
+            # Evita que el texto de columnas diferentes se mezcle si no están perfectamente alineadas
+            bloques.sort(key=lambda b: (round(b[1] / 3), b[0]))
             for b in bloques:
                 contenido_bloque = b[4].strip()
                 if re.search(r"SIGNOS VITALES|PARACLINICOS|ANALISIS|ORDENES", contenido_bloque, re.I):
@@ -58,6 +61,24 @@ class HistoriClinicaExtractor:
             texto_completo += "\n--- FIN DE PAGINA ---\n"
         
         return self.procesar_historia(texto_completo)
+
+    def extraer_texto_con_pdftotext(self, ruta_pdf):
+        try:
+            result = subprocess.run(
+                ["pdftotext", "-layout", str(ruta_pdf), "-"],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except FileNotFoundError:
+            return "Error: no se encontro PyMuPDF ni pdftotext. Instale pymupdf o Poppler."
+        except subprocess.CalledProcessError as exc:
+            detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+            return f"Error al extraer texto con pdftotext: {detail}"
+
+        return self.procesar_historia(result.stdout)
 
     def extraer_datos_cuantitativos(self, texto):
         """
@@ -102,6 +123,9 @@ class HistoriClinicaExtractor:
         
         return datos
 
+    def extraer_signos_duros(self, texto):
+        return self.extraer_datos_cuantitativos(texto)
+
     def procesar_historia(self, texto_crudo):
         """
         Divide la historia en Folios, limpia, deidentifica y extrae datos cuantitativos.
@@ -111,7 +135,7 @@ class HistoriClinicaExtractor:
         texto_seguro = self.deidentificar_texto(texto_crudo)
         
         # Soporte para múltiples formas de decir "Folio"
-        folios_raw = re.split(r"(?i)(FOLIO N[°o]?\s*\d+|FOLIO:\s*\d+)", texto_seguro)
+        folios_raw = re.split(r"(?i)(FOLIO\s*(?:N[°ºo]?|NO\.?)?\s*\.?:?\s*\d+|FOLIO\s*:\s*\d+)", texto_seguro)
         notas_estructuradas = []
         
         for i in range(1, len(folios_raw), 2):

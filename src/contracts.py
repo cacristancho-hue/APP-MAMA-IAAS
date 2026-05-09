@@ -104,7 +104,14 @@ def normalize_dictamen(tipo_iaas, raw, mode="stub"):
 
 
 def _extract_evidence(raw):
-    if isinstance(raw, dict) and ("folio" in raw or "texto" in raw or "evidencia" in raw):
+    if isinstance(raw, dict) and isinstance(raw.get("evidencia"), list):
+        evidence = []
+        for item in raw["evidencia"]:
+            if isinstance(item, dict):
+                evidence.extend(_extract_evidence(item))
+        return evidence
+
+    if isinstance(raw, dict) and ("folio" in raw or "texto" in raw):
         return [raw]
 
     evidence = []

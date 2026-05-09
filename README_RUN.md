@@ -13,6 +13,11 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+Nota operativa 2026-05-09:
+- El entorno local ya tiene Python 3.12.10 y Poppler/pdftotext 25.07.0.
+- Si `pymupdf` no esta instalado, el extractor PDF usa `pdftotext` como fallback local.
+- Mantener `--mode stub` como modo seguro por defecto.
+
 ## Flujo de Ejecución (CLI)
 Para un análisis forense completo desde consola:
 
@@ -40,6 +45,8 @@ python scripts\preflight.py
 # Pruebas unitarias de motor léxico, negaciones y matrices
 python -m unittest discover -s tests
 ```
+
+Si la suite se ejecuta dentro de un sandbox que bloquee `tempfile`, repetirla fuera del sandbox o fijar `TMP/TEMP` a una carpeta local con permisos de escritura.
 
 ## Reportes Auditables
 Ubicación: `outputs/iaas_[TIPO]_[FECHA].html`

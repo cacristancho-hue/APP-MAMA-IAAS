@@ -3,4 +3,9 @@ __pycache__/
 *.pyc
 outputs/
 outputs_preflight/
+outputs_runtime_check*/
+tmp_test/
+.tmp/
 .pytest_cache/
+*.whl
+*-simple.html

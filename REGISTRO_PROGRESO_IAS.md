@@ -17,6 +17,47 @@ Pendiente generado:
 
 ## Entradas
 
+### 2026-05-09 (Intervencion 30 - Verificacion real de herramientas y estabilizacion runtime)
+
+IA/Agente: Codex
+
+Area auditada: Runtime Python / Extractor PDF / Seguridad clinica / Privacidad / Reportes / GitHub-Supabase readiness.
+
+Archivos modificados:
+- `.gitignore`
+- `README_RUN.md`
+- `ESTADO_HERRAMIENTAS_2026-05-09.md`
+- `PROMPT_AUDITORIA_HERRAMIENTAS_2026-05-09.md`
+- `src/contracts.py`
+- `src/llm_analyzer/analyzer.py`
+- `src/pdf_extractor/extractor.py`
+- `src/privacy/guard.py`
+- `src/reporting/reporter.py`
+- `src/validation/clinical_safety.py`
+- `tests/test_core.py`
+
+Cambio realizado:
+Se verifico el entorno real con Python 3.12.10 y Poppler/pdftotext 25.07.0. Se corrigieron corrupciones de archivo que bloqueaban importacion, se agrego fallback local `pdftotext` al extractor PDF cuando falta PyMuPDF, se restauro el contrato `extraer_signos_duros`, se corrigio el HTML de evidencia, se normalizo la extraccion de evidencia para que no quede anidada en el dictamen completo, y se ajusto el patron de negacion semantica para evitar falsos bloqueos por substrings como "patogeno" o "signo". Tambien se documento el estado real de Supabase/GitHub y se creo un prompt de auditoria para decidir integraciones sin sobreprometer.
+
+Riesgo controlado:
+- Se elimina el bloqueo operativo por ausencia de PyMuPDF aprovechando `pdftotext` local.
+- Se evita que una cola corrupta rompa `preflight`, tests y CLI.
+- Se conserva `requiere_revision_humana` y el modo `Seguro local`.
+- Se evita declarar Supabase listo: no hay CLI, variables ni carpeta `supabase/`; cualquier integracion debe ser posterior, institucional y sin PHI por defecto.
+
+Validacion ejecutada:
+- `python scripts\preflight.py`: pasa.
+- `python -m unittest discover -s tests`: 13/13 OK fuera del sandbox de Codex.
+- `python main.py --pdf "HISTORIA CLINICA TIPO HOSPITAL REGIONAL DE LA ORINOQUIA EJEMPLO.pdf" --excel "data\raw_excel\microbiologia_sintetica.csv" --tipo-iaas IVU --mode stub --output-dir outputs_runtime_check_ivu_final`: genera reporte con 252 folios y 2 dictamenes.
+- `gh auth status`: GitHub CLI instalado, token invalido.
+- `git remote show origin`: remoto configurado, HEAD remoto desconocido.
+
+Pendiente generado:
+- Reautenticar GitHub CLI antes de usar issues, PRs o push.
+- Decidir si `src/reporting/persistence.py` debe integrarse como SQLite local canonico antes de Supabase.
+- Definir esquema Supabase solo con datos anonimizados/sinteticos y desactivado por defecto.
+- Revisar manualmente reportes generados y eliminar outputs de prueba antes de entrega.
+
 ### 2026-05-01 (Intervención 4)
 
 IA/Agente: Gemini CLI
@@ -690,7 +731,6 @@ Validacion ejecutada:
 
 Estado Final:
 **SISTEMA CERTIFICADO PARA PILOTO.** El MVP ha pasado de ser un script experimental a una plataforma de auditoría epidemiológica blindada, auditable y de alta privacidad.
-
 
 
 

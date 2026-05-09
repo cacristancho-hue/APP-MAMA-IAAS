@@ -115,6 +115,7 @@ class IAASReporter:
                     "<table><thead><tr><th>Folio</th><th>Fecha</th><th>Hallazgo / Cita Textual</th></tr></thead>"
                     f"<tbody>{''.join(evidence_rows)}</tbody></table>"
                 )
+        evidence_html = "".join(evidence_sections) if evidence_sections else "<p>No hay evidencia trazable registrada para este resultado.</p>"
 
         stub_warning = ""
         if payload.get("mode") == "stub":

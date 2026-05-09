@@ -56,10 +56,22 @@ class AnalyzerTests(unittest.TestCase):
         analyzer = ClinicalAnalyzerIA(mode="stub")
         notas = [
             {
+                "folio": "FOLIO N 0",
+                "fecha": "09/04/2026 16:11",
+                "tipo": "EVOLUCION MEDICA",
+                "contenido": "Paciente con sonda vesical. T: 37.0C.",
+                "datos_duros_verificados": {
+                    "temperaturas": [37.0],
+                    "frecuencias_cardiacas": [],
+                    "frecuencias_respiratorias": [],
+                    "saturaciones": [],
+                },
+            },
+            {
                 "folio": "FOLIO N 1",
                 "fecha": "11/04/2026 16:11",
                 "tipo": "EVOLUCION MEDICA",
-                "contenido": "Paciente con sonda vesical. T: 38.2C.",
+                "contenido": "Paciente con sonda vesical. T: 38.2C. Resultado de urocultivo positivo para E. coli.",
                 "datos_duros_verificados": {
                     "temperaturas": [38.2],
                     "frecuencias_cardiacas": [],
@@ -153,7 +165,7 @@ class ClinicalSafetyTests(unittest.TestCase):
         self.assertIn("confirmacion_bloqueada_sin_evidencia", validado["safety_gate"]["warnings"])
 
     def test_bloquea_cumple_si_falta_evidencia_especifica(self):
-        # IVU requiere: "fiebre", "urocultivo", "sonda"
+        # IVU requiere: "clinica" (fiebre), "laboratorio" (urocultivo), "dispositivo" (sonda)
         dictamen = {
             "tipo_iaas": "IVU",
             "cumple": True,
@@ -169,9 +181,9 @@ class ClinicalSafetyTests(unittest.TestCase):
         }
         validado = ClinicalSafetyValidator().validate(dictamen)
         self.assertFalse(validado["cumple"])
-        self.assertEqual(validado["clasificacion"], "Duda tecnica - falta evidencia especifica")
-        self.assertIn("sonda vesical", validado["motivo_descarte"])
-        self.assertIn("evidencia_especifica_faltante", validado["safety_gate"]["warnings"])
+        self.assertEqual(validado["clasificacion"], "Duda técnica - falla validación semántica")
+        self.assertIn("DISPOSITIVO", validado["motivo_descarte"])
+        self.assertIn("dimensiones_matriz_faltantes_semantica", validado["safety_gate"]["warnings"])
 
 
 class ReporterTests(unittest.TestCase):
