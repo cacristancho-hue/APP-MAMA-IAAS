@@ -4,12 +4,15 @@ from datetime import datetime
 from pathlib import Path
 
 from privacy.guard import PrivacyGuard
+from reporting.persistence import IAASPersistenceManager
 
 
 class IAASReporter:
-    def __init__(self, output_dir="outputs"):
+    def __init__(self, output_dir="outputs", persistence_db_path=None, persist=True):
         self.output_dir = Path(output_dir)
         self.privacy_guard = PrivacyGuard()
+        self.persistence_db_path = persistence_db_path or (self.output_dir / "data" / "iaas_vigilancia.db")
+        self.persist = persist
 
     def write_case_report(self, tipo_iaas, notas, resultados, sospechosos=None, source_pdf=None, mode="stub"):
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -52,6 +55,13 @@ class IAASReporter:
 
         html_path = base.with_suffix(".html")
         html_path.write_text(self._render_html(payload), encoding="utf-8")
+
+        if self.persist:
+            IAASPersistenceManager(self.persistence_db_path).save_analysis(
+                payload,
+                report_json_path=json_path,
+                report_html_path=html_path,
+            )
 
         return json_path
 

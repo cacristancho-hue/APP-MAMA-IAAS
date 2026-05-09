@@ -9,3 +9,5 @@ tmp_test/
 .pytest_cache/
 *.whl
 *-simple.html
+data/*.db
+data/*.db-*

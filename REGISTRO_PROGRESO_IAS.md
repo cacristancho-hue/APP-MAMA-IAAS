@@ -17,6 +17,43 @@ Pendiente generado:
 
 ## Entradas
 
+### 2026-05-09 (Intervencion 31 - Persistencia local SQLite auditable)
+
+IA/Agente: Codex
+
+Area auditada: Persistencia local / Trazabilidad operativa / UX escritorio / Privacidad.
+
+Archivos modificados:
+- `.gitignore`
+- `README_RUN.md`
+- `MANUAL_USUARIO_FINAL.md`
+- `REGISTRO_PROGRESO_IAS.md`
+- `app_escritorio.py`
+- `main.py`
+- `src/reporting/persistence.py`
+- `src/reporting/reporter.py`
+- `tests/test_core.py`
+
+Cambio realizado:
+Se formalizo `src/reporting/persistence.py` como capa SQLite local anonima. El reporte ahora guarda automaticamente un resumen auditable de cada analisis en `data/iaas_vigilancia.db`, incluyendo tipo IAAS, modo, PDF por nombre de archivo, estado de privacidad, conteos, dictamenes, evidencia, safety gate y obligacion de revision humana. Se agrego `--db-path` y `--no-persist` al CLI. La app de escritorio incorpora el boton `Ver historial local`, que abre un HTML generado desde SQLite. Se ignoran bases `data/*.db` para evitar subir historiales locales.
+
+Riesgo controlado:
+- No se guarda PDF completo ni notas clinicas completas en SQLite.
+- La persistencia pasa por `PrivacyGuard.assert_safe_payload` antes de escribir.
+- Todo dictamen conserva `requiere_revision_humana`.
+- Supabase sigue fuera del flujo por defecto; esta capa prepara una migracion posterior sin nube ni PHI.
+
+Validacion ejecutada:
+- `python -m py_compile main.py app_escritorio.py src/reporting/persistence.py src/reporting/reporter.py`: pasa.
+- `python scripts\preflight.py`: pasa.
+- `python -m unittest discover -s tests`: 15/15 OK fuera del sandbox de Codex.
+- `python main.py --pdf "HISTORIA CLINICA TIPO HOSPITAL REGIONAL DE LA ORINOQUIA EJEMPLO.pdf" --excel "data\raw_excel\microbiologia_sintetica.csv" --tipo-iaas IVU --mode stub --output-dir outputs_runtime_check_sqlite --db-path data\iaas_vigilancia_test.db`: genera reporte y DB local con 252 folios, 3 sospechosos, 2 dictamenes y 1 posible.
+
+Pendiente generado:
+- Revisar visualmente el historial local en la app empaquetada.
+- Decidir si el historial debe permitir filtros por fecha/tipo IAAS antes de Supabase.
+- Definir migracion institucional futura desde SQLite a Supabase solo con campos anonimizados.
+
 ### 2026-05-09 (Intervencion 30 - Verificacion real de herramientas y estabilizacion runtime)
 
 IA/Agente: Codex
@@ -731,7 +768,6 @@ Validacion ejecutada:
 
 Estado Final:
 **SISTEMA CERTIFICADO PARA PILOTO.** El MVP ha pasado de ser un script experimental a una plataforma de auditoría epidemiológica blindada, auditable y de alta privacidad.
-
 
 
 

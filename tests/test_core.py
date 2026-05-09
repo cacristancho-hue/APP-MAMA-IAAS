@@ -11,6 +11,7 @@ from contracts import normalize_dictamen
 from excel_parser.parser import MicrobiologyExcelParser
 from pdf_extractor.extractor import HistoriClinicaExtractor
 from privacy.guard import PrivacyGuard
+from reporting.persistence import IAASPersistenceManager
 from reporting.reporter import IAASReporter
 from validation.clinical_safety import ClinicalSafetyValidator
 
@@ -188,7 +189,7 @@ class ClinicalSafetyTests(unittest.TestCase):
 
 class ReporterTests(unittest.TestCase):
     def test_reporte_json_y_csv(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             path = IAASReporter(output_dir=tmp).write_case_report(
                 tipo_iaas="IVU",
                 notas=[],
@@ -207,6 +208,11 @@ class ReporterTests(unittest.TestCase):
             self.assertTrue(path.exists())
             self.assertTrue(path.with_suffix(".csv").exists())
             self.assertTrue(path.with_suffix(".html").exists())
+            db_path = Path(tmp) / "data" / "iaas_vigilancia.db"
+            self.assertTrue(db_path.exists())
+            historial = IAASPersistenceManager(db_path).get_recent_analyses()
+            self.assertEqual(len(historial), 1)
+            self.assertTrue(historial[0]["revision_humana_obligatoria"])
 
     def test_reporte_bloquea_phi_residual(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -216,6 +222,51 @@ class ReporterTests(unittest.TestCase):
                     notas=[],
                     resultados=[{"tipo_iaas": "IVU", "cumple": False, "justificacion": "Paciente: JUAN PEREZ"}],
                 )
+
+    def test_persistencia_local_bloquea_phi(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            manager = IAASPersistenceManager(Path(tmp) / "iaas.db")
+            with self.assertRaises(RuntimeError):
+                manager.save_analysis(
+                    {
+                        "tipo_iaas": "IVU",
+                        "mode": "stub",
+                        "source_pdf": "Paciente JUAN PEREZ.pdf",
+                        "privacy_status": "SIN_PHI_DETECTABLE_EN_REPORTE",
+                        "folios_procesados": 1,
+                        "sospechosos": [],
+                        "resultados": [{"tipo_iaas": "IVU", "cumple": False, "justificacion": "Paciente: JUAN PEREZ"}],
+                        "revision_humana_obligatoria": True,
+                    }
+                )
+
+    def test_historial_local_html(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            db_path = Path(tmp) / "iaas.db"
+            manager = IAASPersistenceManager(db_path)
+            manager.save_analysis(
+                {
+                    "tipo_iaas": "IVU",
+                    "mode": "stub",
+                    "source_pdf": "caso_sintetico.pdf",
+                    "privacy_status": "SIN_PHI_DETECTABLE_EN_REPORTE",
+                    "folios_procesados": 2,
+                    "sospechosos": [],
+                    "resultados": [
+                        {
+                            "tipo_iaas": "IVU",
+                            "cumple": False,
+                            "clasificacion": "No cumple",
+                            "motivo_descarte": "Sin evidencia",
+                            "requiere_revision_humana": True,
+                        }
+                    ],
+                    "revision_humana_obligatoria": True,
+                }
+            )
+            html = manager.write_history_html()
+            self.assertTrue(html.exists())
+            self.assertIn("Historial local IAAS", html.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

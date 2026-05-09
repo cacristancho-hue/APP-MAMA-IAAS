@@ -52,3 +52,6 @@ Si la suite se ejecuta dentro de un sandbox que bloquee `tempfile`, repetirla fu
 Ubicación: `outputs/iaas_[TIPO]_[FECHA].html`
 - El archivo `.json` contiene la traza técnica completa para integración con otros sistemas.
 - El archivo `.html` es el Dashboard de Auditoría para el médico especialista.
+- La base local SQLite anonima queda por defecto en `data/iaas_vigilancia.db`.
+- Para desactivar el historial local use `--no-persist`.
+- Para cambiar la base local use `--db-path "ruta\iaas_vigilancia.db"`.

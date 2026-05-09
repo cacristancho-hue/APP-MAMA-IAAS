@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).resolve().parent / "src"))
 from excel_parser.parser import MicrobiologyExcelParser
 from llm_analyzer.analyzer import ClinicalAnalyzerIA
 from pdf_extractor.extractor import HistoriClinicaExtractor
+from reporting.persistence import IAASPersistenceManager
 from reporting.reporter import IAASReporter
 from contracts import parse_fecha
 
@@ -22,6 +23,8 @@ def ejecutar_vigilancia_iaas(
     mode="stub",
     excel_path=None,
     output_dir="outputs",
+    persistence_db_path="data/iaas_vigilancia.db",
+    persist=True,
     fecha_inicio=None,
     fecha_fin=None,
 ):
@@ -61,7 +64,11 @@ def ejecutar_vigilancia_iaas(
     print(f"  -> {len(resultados)} dictamen(es) generados.")
 
     print("[PASO 4] Generando reporte auditable...")
-    output_path = IAASReporter(output_dir=output_dir).write_case_report(
+    output_path = IAASReporter(
+        output_dir=output_dir,
+        persistence_db_path=persistence_db_path,
+        persist=persist,
+    ).write_case_report(
         tipo_iaas=tipo_iaas,
         notas=notas_estructuradas,
         resultados=resultados,
@@ -70,6 +77,9 @@ def ejecutar_vigilancia_iaas(
         mode=mode,
     )
     print(f"  -> Reporte: {output_path}")
+    historial_db = str(IAASPersistenceManager(persistence_db_path).db_path) if persist else None
+    if historial_db:
+        print(f"  -> Historial local: {historial_db}")
 
     return {
         "tipo_iaas": tipo_iaas,
@@ -80,6 +90,7 @@ def ejecutar_vigilancia_iaas(
         "fecha_fin": fecha_fin,
         "resultados": resultados,
         "reporte": str(output_path),
+        "historial_db": historial_db,
     }
 
 
@@ -146,6 +157,8 @@ def build_parser():
         help="stub genera salida deterministica; llm usa proveedor configurado por entorno.",
     )
     parser.add_argument("--output-dir", default="outputs", help="Directorio de reportes.")
+    parser.add_argument("--db-path", default="data/iaas_vigilancia.db", help="Base local SQLite anonima.")
+    parser.add_argument("--no-persist", action="store_true", help="No guardar historial local SQLite.")
     return parser
 
 
@@ -157,6 +170,8 @@ if __name__ == "__main__":
         mode=args.mode,
         excel_path=args.excel,
         output_dir=args.output_dir,
+        persistence_db_path=args.db_path,
+        persist=not args.no_persist,
         fecha_inicio=args.fecha_inicio,
         fecha_fin=args.fecha_fin,
     )

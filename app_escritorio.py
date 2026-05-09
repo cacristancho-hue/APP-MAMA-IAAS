@@ -7,6 +7,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from main import DEFAULT_PDF, ejecutar_vigilancia_iaas
+from reporting.persistence import IAASPersistenceManager
 
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
@@ -43,6 +44,7 @@ class IAASDesktopApp:
         self.tipo_iaas = tk.StringVar(value="IVU")
         self.mode = tk.StringVar(value=MODO_SEGURO)
         self.last_report = None
+        self.db_path = ROOT / "data" / "iaas_vigilancia.db"
 
         self._build_ui()
         self.root.after(200, self._drain_queue)
@@ -97,6 +99,7 @@ class IAASDesktopApp:
         self.run_button.pack(side="left", ipadx=20, ipady=6)
         ttk.Button(actions, text="Abrir carpeta de reportes", command=self._open_outputs).pack(side="left", padx=12)
         ttk.Button(actions, text="Abrir ultimo reporte", command=self._open_last_report).pack(side="left")
+        ttk.Button(actions, text="Ver historial local", command=self._open_local_history).pack(side="left", padx=12)
         ttk.Button(actions, text="Limpiar mensajes", command=self._clear_log).pack(side="left")
 
         help_box = ttk.LabelFrame(self.root, text="Resultado")
@@ -155,6 +158,8 @@ class IAASDesktopApp:
                 mode=self._selected_mode(),
                 excel_path=lab or None,
                 output_dir=str(ROOT / "outputs"),
+                persistence_db_path=str(self.db_path),
+                persist=True,
                 fecha_inicio=self.fecha_inicio.get().strip() or None,
                 fecha_fin=self.fecha_fin.get().strip() or None,
             )
@@ -193,6 +198,13 @@ class IAASDesktopApp:
             return
         html_path = Path(self.last_report).with_suffix(".html")
         os.startfile(html_path if html_path.exists() else self.last_report)
+
+    def _open_local_history(self):
+        try:
+            html_path = IAASPersistenceManager(self.db_path).write_history_html()
+            os.startfile(html_path)
+        except Exception as exc:
+            messagebox.showerror("Historial no disponible", f"No se pudo abrir el historial local.\n{exc}")
 
     def _clear_log(self):
         self.log.delete("1.0", "end")

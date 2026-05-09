@@ -50,6 +50,9 @@ El sistema compara matemáticamente el estado de ingreso con los síntomas actua
 ### Evidencia Trazable
 Al final del reporte, encontrará las citas textuales y los números de folio donde el sistema detectó la evidencia. Use esto para la auditoría rápida.
 
+### Historial Local
+La aplicación guarda un historial local anonimizado de cada análisis en el equipo. Este historial no reemplaza el reporte ni la revisión humana; sirve para trazabilidad operativa y seguimiento de dictámenes previos.
+
 ---
 
 ## 4. Clasificación de Resultados
