@@ -7,10 +7,13 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from main import DEFAULT_PDF, ejecutar_vigilancia_iaas
+from path_utils import resource_path, writable_path
 from reporting.persistence import IAASPersistenceManager
 
 
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+DEFAULT_PDF_PATH = resource_path(DEFAULT_PDF)
+DEFAULT_LAB_PATH = resource_path("data/raw_excel/microbiologia_sintetica.csv")
 MODO_SEGURO = "Seguro local"
 MODO_IA_EXTERNA = "IA externa"
 TIPOS_IAAS = [
@@ -37,14 +40,15 @@ class IAASDesktopApp:
         self.root.minsize(760, 560)
         self.queue = queue.Queue()
 
-        self.pdf_path = tk.StringVar(value=str(ROOT / DEFAULT_PDF))
-        self.lab_path = tk.StringVar(value=str(ROOT / "data" / "raw_excel" / "microbiologia_sintetica.csv"))
+        self.pdf_path = tk.StringVar(value=str(DEFAULT_PDF_PATH))
+        self.lab_path = tk.StringVar(value=str(DEFAULT_LAB_PATH))
         self.fecha_inicio = tk.StringVar()
         self.fecha_fin = tk.StringVar()
         self.tipo_iaas = tk.StringVar(value="IVU")
         self.mode = tk.StringVar(value=MODO_SEGURO)
         self.last_report = None
-        self.db_path = ROOT / "data" / "iaas_vigilancia.db"
+        self.output_dir = writable_path("outputs")
+        self.db_path = writable_path("data/iaas_vigilancia.db")
 
         self._build_ui()
         self.root.after(200, self._drain_queue)
@@ -124,7 +128,7 @@ class IAASDesktopApp:
         path = filedialog.askopenfilename(
             title="Seleccione laboratorio",
             filetypes=[("Excel o CSV", "*.xlsx *.xls *.csv"), ("Todos los archivos", "*.*")],
-            initialdir=str(ROOT / "data" / "raw_excel"),
+            initialdir=str(DEFAULT_LAB_PATH.parent),
         )
         if path:
             self.lab_path.set(path)
@@ -157,7 +161,7 @@ class IAASDesktopApp:
                 tipo_iaas=self.tipo_iaas.get(),
                 mode=self._selected_mode(),
                 excel_path=lab or None,
-                output_dir=str(ROOT / "outputs"),
+                output_dir=str(self.output_dir),
                 persistence_db_path=str(self.db_path),
                 persist=True,
                 fecha_inicio=self.fecha_inicio.get().strip() or None,
@@ -189,7 +193,8 @@ class IAASDesktopApp:
 
     def _open_outputs(self):
         path = ROOT / "outputs"
-        path.mkdir(exist_ok=True)
+        path = self.output_dir
+        path.mkdir(parents=True, exist_ok=True)
         os.startfile(path)
 
     def _open_last_report(self):

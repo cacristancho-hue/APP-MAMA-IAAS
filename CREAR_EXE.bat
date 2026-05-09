@@ -20,7 +20,8 @@ if not errorlevel 1 (
 )
 
 echo Instalando dependencias necesarias para construir el ejecutable...
-"%PYTHON_EXE%" -m pip install -r requirements.txt pyinstaller
+set "PIP_NO_INDEX=0"
+"%PYTHON_EXE%" -m pip install -r requirements.txt pyinstaller --index-url https://pypi.org/simple
 if errorlevel 1 (
   echo No se pudieron instalar dependencias.
   pause

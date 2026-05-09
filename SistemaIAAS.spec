@@ -21,10 +21,10 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=[
-        "fitz",
         "pandas",
         "openpyxl",
         "tkinter",
+        "sqlite3",
     ],
     hookspath=[],
     hooksconfig={},

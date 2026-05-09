@@ -55,3 +55,4 @@ Ubicación: `outputs/iaas_[TIPO]_[FECHA].html`
 - La base local SQLite anonima queda por defecto en `data/iaas_vigilancia.db`.
 - Para desactivar el historial local use `--no-persist`.
 - Para cambiar la base local use `--db-path "ruta\iaas_vigilancia.db"`.
+- En el `.exe`, reportes e historial se escriben en `%LOCALAPPDATA%\SistemaIAAS` para evitar errores de permisos.

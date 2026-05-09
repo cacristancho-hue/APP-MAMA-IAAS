@@ -12,6 +12,7 @@ from pdf_extractor.extractor import HistoriClinicaExtractor
 from reporting.persistence import IAASPersistenceManager
 from reporting.reporter import IAASReporter
 from contracts import parse_fecha
+from path_utils import writable_path
 
 
 DEFAULT_PDF = "HISTORIA CLINICA TIPO HOSPITAL REGIONAL DE LA ORINOQUIA EJEMPLO.pdf"
@@ -22,13 +23,15 @@ def ejecutar_vigilancia_iaas(
     tipo_iaas="IVU",
     mode="stub",
     excel_path=None,
-    output_dir="outputs",
-    persistence_db_path="data/iaas_vigilancia.db",
+    output_dir=None,
+    persistence_db_path=None,
     persist=True,
     fecha_inicio=None,
     fecha_fin=None,
 ):
     validar_rango_fechas(fecha_inicio, fecha_fin)
+    output_dir = output_dir or str(writable_path("outputs"))
+    persistence_db_path = persistence_db_path or str(writable_path("data/iaas_vigilancia.db"))
 
     print(f"\n{'=' * 72}")
     print(f" SISTEMA DE VIGILANCIA IAAS - TIPO: {tipo_iaas} - MODO: {mode}")
@@ -156,8 +159,8 @@ def build_parser():
         choices=["stub", "llm"],
         help="stub genera salida deterministica; llm usa proveedor configurado por entorno.",
     )
-    parser.add_argument("--output-dir", default="outputs", help="Directorio de reportes.")
-    parser.add_argument("--db-path", default="data/iaas_vigilancia.db", help="Base local SQLite anonima.")
+    parser.add_argument("--output-dir", default=None, help="Directorio de reportes.")
+    parser.add_argument("--db-path", default=None, help="Base local SQLite anonima.")
     parser.add_argument("--no-persist", action="store_true", help="No guardar historial local SQLite.")
     return parser
 

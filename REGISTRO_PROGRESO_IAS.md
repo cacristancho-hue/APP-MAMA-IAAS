@@ -17,6 +17,41 @@ Pendiente generado:
 
 ## Entradas
 
+### 2026-05-09 (Intervencion 32 - Preparacion portable para empaquetado Windows)
+
+IA/Agente: Codex
+
+Area auditada: Empaquetado Windows / Rutas escribibles / Portabilidad / Privacidad.
+
+Archivos modificados:
+- `CREAR_EXE.bat`
+- `EMPAQUETAR_COMO_EXE.md`
+- `README_RUN.md`
+- `REGISTRO_PROGRESO_IAS.md`
+- `SistemaIAAS.spec`
+- `app_escritorio.py`
+- `main.py`
+- `src/path_utils.py`
+
+Cambio realizado:
+Se agregaron utilidades `user_data_dir()` y `writable_path()` para que, en modo `.exe`, reportes e historial SQLite se escriban en `%LOCALAPPDATA%\SistemaIAAS` en lugar de intentar escribir junto al ejecutable. La app de escritorio ahora usa recursos empaquetados mediante `resource_path()` para el PDF y CSV de ejemplo, y usa rutas escribibles para `outputs` y `data/iaas_vigilancia.db`. El `.spec` deja de forzar `fitz` como hidden import y conserva `sqlite3`. `CREAR_EXE.bat` fija `PIP_NO_INDEX=0` y usa PyPI explicitamente para evitar el bloqueo detectado por entorno.
+
+Riesgo controlado:
+- Se reduce riesgo de fallo por permisos al ejecutar desde carpetas protegidas.
+- Se mantiene `pdftotext` como ruta estable si PyMuPDF no esta funcional.
+- No se empaqueta ninguna base SQLite ni outputs locales.
+
+Validacion ejecutada:
+- `python -m py_compile main.py app_escritorio.py src/path_utils.py src/reporting/persistence.py src/reporting/reporter.py`: pasa.
+- `python scripts\preflight.py`: pasa.
+- `python -m unittest discover -s tests`: 15/15 OK fuera del sandbox de Codex.
+- `python main.py --pdf "HISTORIA CLINICA TIPO HOSPITAL REGIONAL DE LA ORINOQUIA EJEMPLO.pdf" --excel "data\raw_excel\microbiologia_sintetica.csv" --tipo-iaas IVU --mode stub --output-dir outputs_runtime_check_portable --db-path data\iaas_portable_test.db`: genera reporte y DB.
+
+Pendiente generado:
+- Ejecutar `python -m PyInstaller SistemaIAAS.spec --clean --noconfirm`.
+- Probar manualmente el `.exe` y confirmar que abre reportes e historial desde `%LOCALAPPDATA%\SistemaIAAS`.
+- Si se distribuira a equipos sin Poppler, empaquetar `pdftotext.exe` y DLLs de Poppler en una etapa posterior.
+
 ### 2026-05-09 (Intervencion 31 - Persistencia local SQLite auditable)
 
 IA/Agente: Codex
@@ -768,7 +803,6 @@ Validacion ejecutada:
 
 Estado Final:
 **SISTEMA CERTIFICADO PARA PILOTO.** El MVP ha pasado de ser un script experimental a una plataforma de auditoría epidemiológica blindada, auditable y de alta privacidad.
-
 
 
 
